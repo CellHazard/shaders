@@ -5,8 +5,12 @@ import numba
 import math
 from numba import jit
 
-# Just how small you want the canvas to be.
-divisor = 5
+'''
+Copyright by splinesen.
+GitHub: splinesen
+'''
+
+divisor = 1
 
 # Set canvas dimensions
 canvas_width = int(1920 / divisor)
@@ -17,53 +21,54 @@ pygame.init()
 
 # Create the canvas
 canvas = pygame.display.set_mode((canvas_width, canvas_height))
-pygame.display.set_caption("Splines UV Canvas Shader")
+pygame.display.set_caption("UV Shader Canvas")
 
-
-@jit(nopython=True)
-def main_image(frag_coord, i_resolution, i_time):
-    #Copyright splinesen. GitHub: https://github.com/splinesen
-    
-    min_intensity = 1.5
-    max_intensity = 5.5
-    combined_intensity = 50.0
-    wave_zoom = 5.0
-    wave_stretch = 1.5
-
-    uv = (frag_coord * 1.0 - i_resolution) / i_resolution[1]
-    uv0 = wave_zoom * uv
-
-    final_col = np.zeros(3)
-
-    uv0[1] += wave_stretch * math.sin(uv0[0] - (i_time * 0.75))
-
-    line_intensity = min_intensity + (max_intensity * abs(np.mod(uv[0] + i_time, 2.0) - 1.0))
-    glow_width = abs(line_intensity / (combined_intensity * uv0[1]))
-
-    final_col += glow_width * np.array([1.0 + math.sin(i_time * 0.33),
-                                        1.0 - math.sin(i_time * 0.33),
-                                        1.0 - math.cos(i_time * 0.33)])
-
-    return final_col
-
+minIntensity = 1.5
+maxIntensity = 9.5
+combinedIntensity = 0.5
+waveZoom = 4.0
+waveStretch = 2.5
 
 @jit(nopython=True)
 def generate_uv_shader(canvas_width, canvas_height, iTime):
-    # Generate pixel colors based on shader logic
     pixels = np.zeros((canvas_height, canvas_width, 3), dtype=np.uint8)
     for y in range(canvas_height):
         for x in range(canvas_width):
-            frag_coord = np.array([y, x], dtype=np.float32)
-            i_resolution = np.array([canvas_width, canvas_height], dtype=np.float32)
-            color = main_image(frag_coord, i_resolution, iTime / 10)
-            pixels[y, x] = np.clip(color * 255, 0, 255).astype(np.uint8)
+
+            # uv (Still needs fixing).
+            u = ((y * 2.0) - canvas_height) / canvas_height
+            v = ((x * 2.0) - canvas_width) / canvas_height
+
+            # uv0
+            u0 = waveZoom * u
+            v0 = waveZoom * v
+
+            # finalCol
+            r = 0
+            g = 0
+            b = 0
+
+            v0 += waveStretch * math.sin(u0 - (iTime * 2.25))
+
+            lineIntensity = minIntensity + (maxIntensity * abs((u + iTime) % 2.0 - 1.0))
+            
+            glowWidth = abs(lineIntensity)
+
+            if combinedIntensity * v0 != 0:
+                glowWidth = abs(lineIntensity / (combinedIntensity * v0))
+
+            r += glowWidth * (1.0 + math.sin(iTime * 0.33))
+            g += glowWidth * (1.0 - math.sin(iTime * 0.33))
+            b += glowWidth * (1.0 - math.cos(iTime * 0.33))
+
+            pixels[y, x] = (r, g, b)
     return pixels
 
 # Main loop
 running = True
 clock = pygame.time.Clock()
 
-iTime = 1
+iTime = 0
 
 while running:
     # Handle events
@@ -71,26 +76,27 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # Generate the UV shader pixel array
+    # Generate the UV shader pixel array.
     random_pixels = generate_uv_shader(canvas_width, canvas_height, iTime)
 
-    # Because pygames clock gives me headache.
-    iTime += 1
+    iTime += 0.01
 
-     # Create a pygame Surface from the numpy array
+     # Create a pygame Surface from the numpy array.
     surface = pygame.surfarray.make_surface(random_pixels)
 
-    # Resize the surface to match the canvas dimensions
+    # Resize the surface to match the canvas dimensions.
     surface = pygame.transform.scale(surface, (canvas_width, canvas_height))
 
-    # Blit the surface onto the canvas
+    # Blit the surface onto the canvas.
     canvas.blit(surface, (0, 0))
 
-    # Update the display
+    # Update the display.
     pygame.display.flip()
 
-    # Cap the frame rate to 60 FPS
-    clock.tick(60)
+    # Cap the frame rate to 120 FPS. Runs at 100~ FPS for me at 1080p resolution.
+    clock.tick(120)
+
+    pygame.display.set_caption(f"Splines UV Canvas | FPS: {clock.get_fps()}")
 
 # Quit pygame
 pygame.quit()
